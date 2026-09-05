@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tempfile
 import urllib.request
+from urllib.parse import urlsplit
 
 STANDARD_VERSION = 1
 REQUIRED_ACCEPTANCE = ("cleanInstall", "coreWorkflow", "permissionRecovery", "terminationRecovery")
@@ -54,40 +55,92 @@ def validate_config(config):
 
 
 def public_errors(manifest):
+    """Validate untrusted JSON without coercion or a partially populated success."""
     errors = []
-    if manifest.get("standardVersion") != STANDARD_VERSION:
+    if not isinstance(manifest, dict):
+        return ["manifest must be an object"]
+    def object_at(parent, field):
+        value = parent.get(field)
+        if not isinstance(value, dict):
+            errors.append(f"{field} must be an object")
+            return {}
+        return value
+    def nonblank(value):
+        return isinstance(value, str) and bool(value.strip())
+    def matches(pattern, value):
+        return isinstance(value, str) and re.fullmatch(pattern, value) is not None
+    def https_url(value):
+        if not nonblank(value) or any(c.isspace() or ord(c) < 32 for c in value):
+            return False
+        try:
+            url = urlsplit(value)
+            return (url.scheme == "https" and bool(url.hostname) and url.port in (None, 443)
+                    and not url.username and not url.password and not url.fragment and "\\" not in value)
+        except ValueError:
+            return False
+    if type(manifest.get("standardVersion")) is not int or manifest["standardVersion"] != STANDARD_VERSION:
         errors.append("unsupported standardVersion")
+    if not matches(r"[a-z0-9]+(?:-[a-z0-9]+)*", manifest.get("id")):
+        errors.append("release needs a valid product id")
+    for field in ("version", "build"):
+        if not matches(r"[a-zA-Z0-9][a-zA-Z0-9._-]*", manifest.get(field)):
+            errors.append(f"release needs a safe {field}")
+    for field in ("name", "bundleId", "createdAt"):
+        if not nonblank(manifest.get(field)):
+            errors.append(f"release needs {field}")
+    if not matches(r"\d+\.\d+(?:\.\d+)?", manifest.get("minimumSystemVersion")):
+        errors.append("release needs a minimum macOS version")
+    architectures = manifest.get("architectures")
+    if (not isinstance(architectures, list) or not architectures
+            or any(a not in ("arm64", "x86_64") for a in architectures)
+            or len(architectures) != len(set(a for a in architectures if isinstance(a, str)))):
+        errors.append("release needs unique supported architectures")
     if manifest.get("channel") not in ("firstdrop", "release"):
         errors.append("public channel must be firstdrop or release")
-    source = manifest.get("source", {})
-    if not re.fullmatch(r"[a-f0-9]{40}", source.get("commit", "")) or source.get("dirty") is not False:
+    source = object_at(manifest, "source")
+    if not matches(r"[a-f0-9]{40}", source.get("commit")) or source.get("dirty") is not False:
         errors.append("release must identify a clean source commit")
-    checks = manifest.get("verification", {})
+    checks = object_at(manifest, "verification")
     for check in ("signature", "notarization", "gatekeeper", "roundTrip"):
         if checks.get(check) is not True:
             errors.append(f"{check} has not passed")
-    acceptance = manifest.get("acceptance", {})
+    acceptance = object_at(manifest, "acceptance")
     if acceptance.get("commit") != source.get("commit"):
         errors.append("acceptance must refer to the release source commit")
-    if not acceptance.get("testedBy") or not acceptance.get("testedAt") or not acceptance.get("configurations"):
+    configurations = acceptance.get("configurations")
+    if (not nonblank(acceptance.get("testedBy")) or not nonblank(acceptance.get("testedAt"))
+            or not isinstance(configurations, list) or not configurations or not all(map(nonblank, configurations))):
         errors.append("acceptance needs tester, date, and tested configurations")
+    acceptance_checks = object_at(acceptance, "checks")
     for name in (*REQUIRED_ACCEPTANCE, *(("upgrade",) if manifest.get("channel") == "release" else ())):
-        result = acceptance.get("checks", {}).get(name, {})
-        if result.get("status") not in ("passed", "not-applicable") or not result.get("evidence"):
+        result = object_at(acceptance_checks, name)
+        if result.get("status") not in ("passed", "not-applicable") or not nonblank(result.get("evidence")):
             errors.append(f"acceptance {name} needs a result and evidence")
         if name in ("cleanInstall", "coreWorkflow", "terminationRecovery") and result.get("status") == "not-applicable":
             errors.append(f"acceptance {name} cannot be waived")
     artifacts = manifest.get("artifacts", [])
-    if not artifacts:
-        errors.append("no release artifacts")
+    if not isinstance(artifacts, list) or len(artifacts) != 2 or not all(isinstance(a, dict) for a in artifacts):
+        errors.append("release needs exactly two artifact objects")
+        artifacts = []
+    names = []
+    hashes = {}
     for artifact in artifacts:
-        if not re.fullmatch(r"[a-f0-9]{64}", artifact.get("sha256", "")) or artifact.get("bytes", 0) <= 0:
+        name, kind = artifact.get("name"), artifact.get("kind")
+        if (not matches(r"[a-zA-Z0-9][a-zA-Z0-9._-]*\.(?:dmg|zip)", name)
+                or kind not in ("dmg", "zip") or not name.endswith("." + kind)):
+            errors.append("artifact needs a safe filename matching its kind")
+        elif name in names:
+            errors.append("artifact filenames must be unique")
+        else:
+            names.append(name)
+            hashes[name] = artifact.get("sha256")
+        if not matches(r"[a-f0-9]{64}", artifact.get("sha256")) or type(artifact.get("bytes")) is not int or artifact["bytes"] <= 0:
             errors.append("artifact needs SHA-256 and size")
-        if not artifact.get("url", "").startswith("https://"):
+        if not https_url(artifact.get("url")):
             errors.append("artifact needs a public HTTPS URL")
-    if {a.get("kind") for a in artifacts} != {"dmg", "zip"}:
+    if sorted(a.get("kind") for a in artifacts if isinstance(a.get("kind"), str)) != ["dmg", "zip"]:
         errors.append("release needs both a DMG and an app-only ZIP")
-    if acceptance.get("artifactHashes") != {a.get("name"): a.get("sha256") for a in artifacts}:
+    if not isinstance(acceptance.get("artifactHashes"), dict) or acceptance.get("artifactHashes") != hashes:
         errors.append("acceptance must identify the exact artifact hashes")
     return errors
 
