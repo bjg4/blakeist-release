@@ -1,0 +1,31 @@
+name: Blakeist macOS package
+description: Build and inspect a Mac app using the shared release contract
+inputs:
+  config:
+    description: Release configuration relative to the workspace
+    default: release.config.json
+  output:
+    description: Empty output directory
+    default: release-output
+  preview:
+    description: Internal test artifact; false requires signing and notarization credentials
+    default: 'true'
+  channel:
+    description: Public channel to target after acceptance
+    default: firstdrop
+runs:
+  using: composite
+  steps:
+    - name: Build and inspect package
+      shell: bash
+      env:
+        TOOLKIT: ${{ github.action_path }}
+        CONFIG: ${{ inputs.config }}
+        OUTPUT: ${{ inputs.output }}
+        PREVIEW: ${{ inputs.preview }}
+        CHANNEL: ${{ inputs.channel }}
+      run: |
+        set -euo pipefail
+        args=(build --config "$CONFIG" --output "$OUTPUT" --channel "$CHANNEL")
+        if [[ "$PREVIEW" == "true" ]]; then args+=(--preview); fi
+        python3 "$TOOLKIT/release.py" "${args[@]}"

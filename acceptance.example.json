@@ -1,0 +1,14 @@
+{
+  "commit": "REPLACE_WITH_EXACT_SOURCE_COMMIT",
+  "artifactHashes": {},
+  "testedBy": "",
+  "testedAt": "",
+  "configurations": [],
+  "checks": {
+    "cleanInstall": {"status": "pending", "evidence": ""},
+    "coreWorkflow": {"status": "pending", "evidence": ""},
+    "permissionRecovery": {"status": "pending", "evidence": ""},
+    "terminationRecovery": {"status": "pending", "evidence": ""},
+    "upgrade": {"status": "pending", "evidence": ""}
+  }
+}
