@@ -1,12 +1,14 @@
 {
   "schemaVersion": 1,
   "catalogUrl": "https://www.blake.ist/tools/catalog.json",
-  "maximumCheckAgeDays": 9,
+  "maximumCheckAgeDays": 16,
   "policy": {
+    "schedule": "Paused after the September 5, 2026 Actions allowance incident. Resume only with user authorization, at most once every two weeks; no additional daily or weekly jobs.",
+    "costControl": "This cost policy overrides older README, build and CI instructions. Use read-only inspection and local tests by default. Do not enable, dispatch, rerun or indirectly trigger hosted CI or Dependabot version-update jobs without explicit user authorization of the execution budget. Never increase spending limits or add paid services. If local tooling is unavailable, record the blocker instead of using hosted macOS runners. Disabled or missing checks are unresolved, never passing evidence.",
     "changeGate": "Every change gets a clean build, relevant automated tests, and a diff review. Fixes need a reproducer that fails before the fix and passes after it. Record the exact commit and evidence; skipped or unavailable checks are not passes.",
-    "adversarialReview": "Each week challenge one critical invariant per project with malformed inputs, boundary values, dependency failure, cancellation, or interleaving. Add a deterministic regression when it reveals a defect. Verify important tests detect a deliberately broken implementation in a disposable copy.",
+    "adversarialReview": "At each authorized fortnightly review, rotate coverage and challenge a critical invariant in the highest-risk changed projects with malformed inputs, boundary values, dependency failure, cancellation, or interleaving. Add a deterministic regression when it reveals a defect. Verify important tests detect a deliberately broken implementation in a disposable copy.",
     "performance": "Measure realistic fixtures before optimizing. Preserve Blakedown's cold/warm render budgets and Porthole's bounded scans; record input size, machine, latency and memory. Never relax a budget simply to turn a failure green.",
-    "dependencies": "Review weekly Dependabot pull requests and upstream advisories for direct and transitive dependencies. Prioritize reachable vulnerabilities; exceptions need scope, evidence, owner and an expiry. Never suppress an audit by silently excluding a dependency.",
+    "dependencies": "Review upstream advisories and accumulated dependency changes during the authorized fortnightly review. Automatic Dependabot version-update PRs are disabled. Prioritize reachable vulnerabilities; exceptions need scope, evidence, owner and an expiry. Never suppress an audit by silently excluding a dependency.",
     "release": "Build success is not release acceptance. Public binaries require signature, notarization, anonymous download integrity, exact-artifact acceptance, documented recovery, and upgrade testing for stable releases. Never substitute simulated tests for hardware evidence.",
     "autonomy": "Prepare and merge routine repairs only after all applicable checks pass on the current commit and the diff has been reviewed. Preserve unrelated local changes. Escalate product changes, missing access and hardware/signing requirements. Do not perform real sleep changes, key injection, device firmware writes or termination of user processes in automated checks."
   },
