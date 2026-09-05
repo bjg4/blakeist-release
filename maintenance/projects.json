@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "catalogUrl": "https://www.blake.ist/tools/catalog.json",
+  "maximumCheckAgeDays": 9,
+  "policy": {
+    "changeGate": "Every change gets a clean build, relevant automated tests, and a diff review. Fixes need a reproducer that fails before the fix and passes after it. Record the exact commit and evidence; skipped or unavailable checks are not passes.",
+    "adversarialReview": "Each week challenge one critical invariant per project with malformed inputs, boundary values, dependency failure, cancellation, or interleaving. Add a deterministic regression when it reveals a defect. Verify important tests detect a deliberately broken implementation in a disposable copy.",
+    "performance": "Measure realistic fixtures before optimizing. Preserve Blakedown's cold/warm render budgets and Porthole's bounded scans; record input size, machine, latency and memory. Never relax a budget simply to turn a failure green.",
+    "dependencies": "Review weekly Dependabot pull requests and upstream advisories for direct and transitive dependencies. Prioritize reachable vulnerabilities; exceptions need scope, evidence, owner and an expiry. Never suppress an audit by silently excluding a dependency.",
+    "release": "Build success is not release acceptance. Public binaries require signature, notarization, anonymous download integrity, exact-artifact acceptance, documented recovery, and upgrade testing for stable releases. Never substitute simulated tests for hardware evidence.",
+    "autonomy": "Prepare and merge routine repairs only after all applicable checks pass on the current commit and the diff has been reviewed. Preserve unrelated local changes. Escalate product changes, missing access and hardware/signing requirements. Do not perform real sleep changes, key injection, device firmware writes or termination of user processes in automated checks."
+  },
+  "projects": [
+    {
+      "id": "grindset", "repository": "bjg4/grindset", "directory": "grindset", "tool": true,
+      "workflows": ["package.yml"], "testCommand": ["bash", "build.sh"],
+      "invariants": ["Closed-lid sessions keep local work running", "Owned sleep overrides are restored after stop, deadline, low battery, disconnect and app exit", "Existing overrides owned by another app are preserved"],
+      "automatedEvidence": ["tests/LeaseTests.swift", "tests/test_guard.py"],
+      "nextChallenges": ["Guard status socket backpressure during restoration", "Wall-clock changes during timed sessions", "Application freeze before timer configuration", "Permission cancellation and rapid start/stop"],
+      "hardwareGate": "MacBook lid closure on battery and AC with an actual local agent, network availability, reopen, expiry, force quit, low-battery recovery; test oldest claimed OS and each advertised architecture."
+    },
+    {
+      "id": "fx-talk", "repository": "bjg4/fx-talk", "directory": "fx-talk", "tool": true,
+      "workflows": ["package.yml", "test.yml"], "testCommand": ["zsh", "build.sh"],
+      "invariants": ["Noise cannot send Enter", "Startup-held controls must release before arming", "Disconnection and disabling release held keys"],
+      "automatedEvidence": ["Tests/FXTalkCoreTests/AudioSignalTests.swift", "Tests/FXTalkCoreTests/ControlsTests.swift", "Tests/FXTalkCoreTests/OrangeSubmitTests.swift", "device/test_device.py"],
+      "nextChallenges": ["Seeded noise across sample rates, amplitudes and chunk boundaries", "Mic disconnect and reconnect while controls are held", "Permission revocation and sleep/wake during dictation"],
+      "hardwareGate": "Real FX-MIC and audio adapter; microphone and Accessibility recovery, no false Enter, no stuck modifiers, upgrade and uninstall."
+    },
+    {
+      "id": "porthole", "repository": "bjg4/Porthole", "directory": "Porthole", "tool": true,
+      "workflows": ["package.yml"], "testCommand": ["bash", "scripts/build-release.sh"],
+      "invariants": ["Stop affects only the selected listener with its expected identity", "Scanning is bounded and does not freeze the menu", "Directory names remain data when opening a terminal"],
+      "automatedEvidence": ["Porthole/Tests/PortholeTests/PortScannerTests.swift", "Porthole/Tests/PortholeTests/ServerManagerTests.swift"],
+      "nextChallenges": ["PID reuse between listing and termination", "Malformed lsof fields and large listener sets", "Quotes, newlines and shell syntax in directory names", "Overlapping scans and failed permission checks"],
+      "hardwareGate": "Open and stop disposable development servers only; fresh install and manual upgrade from 1.0, which has no embedded updater."
+    },
+    {
+      "id": "blakedown", "repository": "bjg4/blakedown", "directory": "blakedown", "tool": true,
+      "workflows": ["package.yml", "quality-gate.yml"], "testCommand": ["bash", "scripts/build-release.sh"],
+      "invariants": ["Untrusted Markdown cannot execute scripts", "Viewing a file does not change it", "Deleted or oversized files produce a recoverable error", "Cold and warm rendering stay within measured budgets"],
+      "automatedEvidence": ["Blakedown/Tests/BlakedownCoreTests/HTMLSanitizerTests.swift", "Blakedown/Tests/BlakedownAppTests/DocumentRenderServiceTests.swift", "Blakedown/Tests/BlakedownAppTests/PerformanceBudgetTests.swift"],
+      "nextChallenges": ["Encoded script URLs, SVG and malformed HTML nesting", "Files replaced or deleted during a render", "Deeply nested and large Markdown fixtures", "Remote image failure and file URL navigation"],
+      "hardwareGate": "Open representative files, permission recovery, offline use and upgrade; verify nested Sparkle signatures after anonymous download."
+    },
+    {
+      "id": "blakeist", "repository": "bjg4/blakeist", "directory": "blakeist", "tool": false,
+      "workflows": ["quality.yml"], "testCommand": ["npm", "test"],
+      "invariants": ["Every listed tool has a working page and help route", "Public-ready claims require a valid release manifest", "Private alpha never acquires an unverified download", "Built pages work without JavaScript"],
+      "automatedEvidence": ["tests/agent-readiness.test.ts", "tests/tools.test.ts", "scripts/check-tool-releases.mjs"],
+      "nextChallenges": ["Stale downloads, missing help pages and inventory drift", "Malformed release records bypassing the importer", "Content negotiation edge cases", "Page weight growth after dependency changes"]
+    },
+    {
+      "id": "blakeist-release", "repository": "bjg4/blakeist-release", "directory": "blakeist-release", "tool": false,
+      "workflows": ["test.yml"], "testCommand": ["python3", "-m", "unittest", "-v"],
+      "invariants": ["Malformed, unsigned or unaccepted releases fail closed", "Acceptance belongs to the exact source and artifact hashes", "Published versions cannot be overwritten", "Concurrent promotion cannot clobber the channel pointer"],
+      "automatedEvidence": ["test_release.py", "test_publish.py", "test_maintenance.py"],
+      "nextChallenges": ["Hostile archive paths and symbolic links", "Nested binary architecture mismatch", "Concurrent publication and interrupted downloads", "Mutation-test the release gate"],
+      "hardwareGate": "One real signed, notarized, downloaded and upgraded release before claiming end-to-end distribution is proven."
+    }
+  ]
+}

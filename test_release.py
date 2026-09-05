@@ -6,6 +6,8 @@ from release import public_errors, validate_config
 class ReleaseContractTests(unittest.TestCase):
     def setUp(self):
         self.manifest = {"standardVersion": 1, "channel": "firstdrop", "source": {"commit": "a" * 40, "dirty": False},
+            "id": "example", "name": "Example", "version": "1.0", "build": "1", "bundleId": "com.example.app",
+            "createdAt": "2026-09-05T12:00:00Z", "minimumSystemVersion": "13.0", "architectures": ["arm64"],
             "verification": {k: True for k in ("signature", "notarization", "gatekeeper", "roundTrip")},
             "acceptance": {"commit": "a" * 40, "testedBy": "Tester", "testedAt": "2026-09-05", "configurations": ["macOS 15 arm64"],
                 "checks": {k: {"status": "passed", "evidence": "Recorded acceptance run"} for k in
@@ -62,6 +64,51 @@ class ReleaseContractTests(unittest.TestCase):
         config = {"id": "test", "name": "Test", "bundleId": "test.app", "appPath": "Test.app", "minimumSystemVersion": "13.0", "architectures": ["arm64"], "build": "make && upload"}
         with self.assertRaises(ValueError):
             validate_config(config)
+
+    def test_removing_any_required_metadata_cannot_qualify(self):
+        for field in self.manifest:
+            with self.subTest(field=field):
+                candidate = copy.deepcopy(self.manifest)
+                del candidate[field]
+                self.assertTrue(public_errors(candidate))
+
+    def test_untrusted_json_types_fail_closed_without_crashing(self):
+        # Exercise every nested location, not just the root of the document.
+        paths = [(key,) for key in self.manifest]
+        paths += [("acceptance", key) for key in self.manifest["acceptance"]]
+        paths += [("artifacts", 0, key) for key in self.manifest["artifacts"][0]]
+        paths += [("source", key) for key in self.manifest["source"]]
+        paths += [("acceptance", "checks", key) for key in self.manifest["acceptance"]["checks"]]
+        paths += [("verification", key) for key in self.manifest["verification"]]
+        for path in paths:
+            for value in (None, [], {}, True, 0, ""):
+                with self.subTest(path=path, value=value):
+                    candidate = copy.deepcopy(self.manifest)
+                    target = candidate
+                    for part in path[:-1]:
+                        target = target[part]
+                    # True is the correct verification value, not a mutation.
+                    if type(target[path[-1]]) is type(value) and target[path[-1]] == value:
+                        continue
+                    target[path[-1]] = value
+                    self.assertTrue(public_errors(candidate))
+        for value in (None, [], True, 42, "manifest"):
+            self.assertTrue(public_errors(value))
+
+    def test_ambiguous_artifacts_and_deceptive_urls_are_rejected(self):
+        for field, values in {
+            "name": ["../app.dmg", "app.zip", "app.dmg\n", "app.dmg?download=1"],
+            "url": ["https://", "https://user:pass@example.com/app.dmg", "https://example.com\\@evil.com/app.dmg", "https://example.com/app.dmg\n", "https://example.com/app.dmg#different"],
+            "bytes": [True, 1.5, -1],
+            "kind": ["tar", ["dmg"]],
+        }.items():
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    candidate = copy.deepcopy(self.manifest)
+                    candidate["artifacts"][0][field] = value
+                    self.assertTrue(public_errors(candidate))
+        self.manifest["artifacts"].append(copy.deepcopy(self.manifest["artifacts"][0]))
+        self.assertTrue(public_errors(self.manifest))
 
 
 if __name__ == "__main__":
