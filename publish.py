@@ -52,6 +52,8 @@ def upload(client, bucket, path):
             raise ValueError("Local artifact changed after packaging")
         immutable_put(client, bucket, f"{prefix}/{name}", local.read_bytes(),
                       mimetypes.guess_type(name)[0] or "application/octet-stream")
+    checksums = "".join(f"{a['sha256']}  {a['name']}\n" for a in manifest["artifacts"])
+    immutable_put(client, bucket, f"{prefix}/SHA256SUMS.txt", checksums.encode(), "text/plain")
     print(f"Candidate uploaded at {prefix}. Run verify-download before promotion.")
 
 
